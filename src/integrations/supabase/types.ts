@@ -14,16 +14,181 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      applications: {
+        Row: {
+          body: string | null
+          company_name: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          recipient_email: string
+          resume_used: string | null
+          role_name: string
+          status: Database["public"]["Enums"]["application_status"]
+          subject: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          company_name?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          recipient_email: string
+          resume_used?: string | null
+          role_name: string
+          status?: Database["public"]["Enums"]["application_status"]
+          subject: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          company_name?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          recipient_email?: string
+          resume_used?: string | null
+          role_name?: string
+          status?: Database["public"]["Enums"]["application_status"]
+          subject?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      job_roles: {
+        Row: {
+          created_at: string
+          email_template: string
+          id: string
+          resume_name: string | null
+          resume_path: string | null
+          role_name: string
+          subject_template: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_template?: string
+          id?: string
+          resume_name?: string | null
+          resume_path?: string | null
+          role_name: string
+          subject_template?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_template?: string
+          id?: string
+          resume_name?: string | null
+          resume_path?: string | null
+          role_name?: string
+          subject_template?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          last_login: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string
+          id: string
+          last_login?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          last_login?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      smtp_settings: {
+        Row: {
+          sender_email: string
+          sender_name: string | null
+          smtp_host: string
+          smtp_password: string
+          smtp_port: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          sender_email: string
+          sender_name?: string | null
+          smtp_host?: string
+          smtp_password: string
+          smtp_port?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          sender_email?: string
+          sender_name?: string | null
+          smtp_host?: string
+          smtp_password?: string
+          smtp_port?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
+      application_status: "sent" | "failed" | "pending"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +315,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+      application_status: ["sent", "failed", "pending"],
+    },
   },
 } as const
