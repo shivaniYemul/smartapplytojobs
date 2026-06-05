@@ -158,9 +158,11 @@ function ForgotForm() {
       setLoading(true);
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/auth?mode=reset` });
       setLoading(false);
-      if (error) { toast.error(error.message); return; }
-      toast.success("Check your email for a reset link.");
+      if (error) console.error("[reset-password]", error.message);
+      // Always show the same message to prevent user enumeration.
+      toast.success("If that address is registered, a reset link has been sent.");
     }}>
+
       <CardDescription>Enter your email and we'll send a reset link.</CardDescription>
       <div className="space-y-2"><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
       <Button type="submit" className="w-full" disabled={loading}>{loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Send reset link</Button>
