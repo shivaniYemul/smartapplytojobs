@@ -28,6 +28,52 @@ async function sendViaNodemailer(cfg: SmtpConfig, opts: {
   return info.messageId;
 }
 
+export const getSmtpSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await context.supabase
+      .from("smtp_settings")
+      .select("sender_email, sender_name, smtp_host, smtp_port, updated_at")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!data) return { smtp_configured: false as const };
+    return { smtp_configured: true as const, ...data };
+  });
+
+export const saveSmtpSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { senderEmail: string; senderName?: string; host: string; port: number; password?: string }) =>
+    z.object({
+      senderEmail: z.string().email().max(255),
+      senderName: z.string().max(200).optional(),
+      host: z.string().min(1).max(255),
+      port: z.number().int().min(1).max(65535),
+      password: z.string().min(1).max(500).optional(),
+    }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: existing } = await supabase.from("smtp_settings").select("user_id").eq("user_id", userId).maybeSingle();
+    if (!existing) {
+      if (!data.password) throw new Error("Password is required when configuring SMTP for the first time.");
+      const { error } = await supabase.from("smtp_settings").insert({
+        user_id: userId, sender_email: data.senderEmail, sender_name: data.senderName ?? null,
+        smtp_host: data.host, smtp_port: data.port, smtp_password: data.password,
+      });
+      if (error) throw new Error(error.message);
+    } else {
+      const update: {
+        sender_email: string; sender_name: string | null; smtp_host: string; smtp_port: number; smtp_password?: string;
+      } = {
+        sender_email: data.senderEmail, sender_name: data.senderName ?? null,
+        smtp_host: data.host, smtp_port: data.port,
+      };
+      if (data.password) update.smtp_password = data.password;
+      const { error } = await supabase.from("smtp_settings").update(update).eq("user_id", userId);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
+  });
+
 export const testSmtp = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

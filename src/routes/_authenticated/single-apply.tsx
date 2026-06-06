@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { generateApplicationEmail } from "@/lib/ai.functions";
-import { sendApplication } from "@/lib/mailer.functions";
+import { sendApplication, getSmtpSettings } from "@/lib/mailer.functions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ export const Route = createFileRoute("/_authenticated/single-apply")({
 function SingleApply() {
   const generate = useServerFn(generateApplicationEmail);
   const send = useServerFn(sendApplication);
+  const fetchSmtp = useServerFn(getSmtpSettings);
 
   const { data: roles = [] } = useQuery({
     queryKey: ["job_roles"],
@@ -30,7 +31,7 @@ function SingleApply() {
   });
   const { data: smtp } = useQuery({
     queryKey: ["smtp_settings"],
-    queryFn: async () => (await supabase.from("smtp_settings").select("*").maybeSingle()).data,
+    queryFn: () => fetchSmtp(),
   });
   const { data: profile } = useQuery({
     queryKey: ["profile"],
@@ -80,7 +81,7 @@ function SingleApply() {
         <p className="text-muted-foreground mt-1">Generate and send one tailored application.</p>
       </div>
 
-      {!smtp && (
+      {!smtp?.smtp_configured && (
         <Card className="border-warning/40 bg-warning/5">
           <CardContent className="py-4 flex items-center gap-3 text-sm">
             <AlertCircle className="h-4 w-4 text-warning" />
@@ -126,7 +127,7 @@ function SingleApply() {
             <div><Label>Subject</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Generated subject appears here" /></div>
             <div><Label>Email body</Label><Textarea rows={12} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Generated body appears here" className="font-mono text-sm" /></div>
             {role?.resume_name && <p className="text-xs text-muted-foreground">📎 Attachment: {role.resume_name}</p>}
-            <Button onClick={onSend} disabled={sending || !smtp || !roles.length} className="w-full">
+            <Button onClick={onSend} disabled={sending || !smtp?.smtp_configured || !roles.length} className="w-full">
               {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
               Send application
             </Button>
