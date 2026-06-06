@@ -127,7 +127,7 @@ function SingleApply() {
             <div><Label>Subject</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Generated subject appears here" /></div>
             <div><Label>Email body</Label><Textarea rows={12} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Generated body appears here" className="font-mono text-sm" /></div>
             {role?.resume_name && <p className="text-xs text-muted-foreground">📎 Attachment: {role.resume_name}</p>}
-            <Button onClick={onSend} disabled={sending || !smtp || !roles.length} className="w-full">
+            <Button onClick={onSend} disabled={sending || !smtp?.smtp_configured || !roles.length} className="w-full">
               {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
               Send application
             </Button>
