@@ -4,7 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { generateApplicationEmail } from "@/lib/ai.functions";
-import { sendApplication } from "@/lib/mailer.functions";
+import { sendApplication, getSmtpSettings } from "@/lib/mailer.functions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
