@@ -23,6 +23,7 @@ export const Route = createFileRoute("/_authenticated/single-apply")({
 function SingleApply() {
   const generate = useServerFn(generateApplicationEmail);
   const send = useServerFn(sendApplication);
+  const fetchSmtp = useServerFn(getSmtpSettings);
 
   const { data: roles = [] } = useQuery({
     queryKey: ["job_roles"],
@@ -30,7 +31,7 @@ function SingleApply() {
   });
   const { data: smtp } = useQuery({
     queryKey: ["smtp_settings"],
-    queryFn: async () => (await supabase.from("smtp_settings").select("*").maybeSingle()).data,
+    queryFn: () => fetchSmtp(),
   });
   const { data: profile } = useQuery({
     queryKey: ["profile"],
