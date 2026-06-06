@@ -81,7 +81,7 @@ function SingleApply() {
         <p className="text-muted-foreground mt-1">Generate and send one tailored application.</p>
       </div>
 
-      {!smtp && (
+      {!smtp?.smtp_configured && (
         <Card className="border-warning/40 bg-warning/5">
           <CardContent className="py-4 flex items-center gap-3 text-sm">
             <AlertCircle className="h-4 w-4 text-warning" />
