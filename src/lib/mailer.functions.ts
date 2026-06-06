@@ -61,7 +61,9 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
       });
       if (error) throw new Error(error.message);
     } else {
-      const update: Record<string, unknown> = {
+      const update: {
+        sender_email: string; sender_name: string | null; smtp_host: string; smtp_port: number; smtp_password?: string;
+      } = {
         sender_email: data.senderEmail, sender_name: data.senderName ?? null,
         smtp_host: data.host, smtp_port: data.port,
       };
