@@ -28,17 +28,52 @@ async function sendViaNodemailer(cfg: SmtpConfig, opts: {
   return info.messageId;
 }
 
+// Response schema — enforced at runtime so secret columns can never leak,
+// even if a future change adds `select("*")` or spreads the raw DB row.
+export const SmtpSettingsResponseSchema = z.discriminatedUnion("smtp_configured", [
+  z.object({ smtp_configured: z.literal(false) }).strict(),
+  z.object({
+    smtp_configured: z.literal(true),
+    sender_email: z.string(),
+    sender_name: z.string().nullable(),
+    smtp_host: z.string(),
+    smtp_port: z.number(),
+    updated_at: z.string(),
+  }).strict(),
+]);
+export type SmtpSettingsResponse = z.infer<typeof SmtpSettingsResponseSchema>;
+
 export const getSmtpSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async ({ context }): Promise<SmtpSettingsResponse> => {
     const { data } = await context.supabase
       .from("smtp_settings")
       .select("sender_email, sender_name, smtp_host, smtp_port, updated_at")
       .eq("user_id", context.userId)
       .maybeSingle();
-    if (!data) return { smtp_configured: false as const };
-    return { smtp_configured: true as const, ...data };
+    const response: SmtpSettingsResponse = !data
+      ? { smtp_configured: false }
+      : {
+          smtp_configured: true,
+          sender_email: data.sender_email,
+          sender_name: data.sender_name,
+          smtp_host: data.smtp_host,
+          smtp_port: data.smtp_port,
+          updated_at: data.updated_at,
+        };
+    // `.strict()` throws if any unknown key (e.g. smtp_password) sneaks in.
+    return SmtpSettingsResponseSchema.parse(response);
   });
+
+const SaveSmtpResponseSchema = z.object({ ok: z.literal(true) }).strict();
+const TestSmtpResponseSchema = z.union([
+  z.object({ ok: z.literal(true) }).strict(),
+  z.object({ ok: z.literal(false), error: z.string() }).strict(),
+]);
+const SendApplicationResponseSchema = z.object({
+  ok: z.literal(true),
+  id: z.string().uuid(),
+}).strict();
 
 export const saveSmtpSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -71,7 +106,7 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
       const { error } = await supabase.from("smtp_settings").update(update).eq("user_id", userId);
       if (error) throw new Error(error.message);
     }
-    return { ok: true };
+    return SaveSmtpResponseSchema.parse({ ok: true });
   });
 
 export const testSmtp = createServerFn({ method: "POST" })
@@ -86,9 +121,9 @@ export const testSmtp = createServerFn({ method: "POST" })
         auth: { user: smtp.sender_email, pass: smtp.smtp_password },
       });
       await t.verify();
-      return { ok: true };
+      return TestSmtpResponseSchema.parse({ ok: true });
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "Connection failed" };
+      return TestSmtpResponseSchema.parse({ ok: false, error: e instanceof Error ? e.message : "Connection failed" });
     }
   });
 
@@ -141,7 +176,7 @@ export const sendApplication = createServerFn({ method: "POST" })
         { to: data.recipientEmail, subject: data.subject, text: data.body, attachment },
       );
       await supabase.from("applications").update({ status: "sent" }).eq("id", app.id);
-      return { ok: true, id: app.id };
+      return SendApplicationResponseSchema.parse({ ok: true, id: app.id });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Send failed";
       await supabase.from("applications").update({ status: "failed", error_message: msg }).eq("id", app.id);

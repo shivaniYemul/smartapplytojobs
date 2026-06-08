@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { SmtpSettingsResponseSchema } from "../src/lib/mailer.functions";
 
 // Server-side files that legitimately handle the raw password.
 const SERVER_ONLY_ALLOWLIST = [
@@ -70,5 +71,44 @@ describe("smtp_password isolation — server contract", () => {
     for (const call of consoleCalls) {
       expect(call.toLowerCase()).not.toMatch(/smtp_password|smtp\b|password|smtp\.|\bsmtp\b/);
     }
+  });
+});
+
+describe("smtp_password isolation — response schema", () => {
+  it("rejects responses that include smtp_password", () => {
+    expect(() =>
+      SmtpSettingsResponseSchema.parse({
+        smtp_configured: true,
+        sender_email: "a@b.com",
+        sender_name: null,
+        smtp_host: "smtp.gmail.com",
+        smtp_port: 587,
+        updated_at: new Date().toISOString(),
+        smtp_password: "leaked",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects an unconfigured response that carries extra fields", () => {
+    expect(() =>
+      SmtpSettingsResponseSchema.parse({ smtp_configured: false, smtp_password: "x" }),
+    ).toThrow();
+  });
+
+  it("accepts the safe configured shape", () => {
+    const parsed = SmtpSettingsResponseSchema.parse({
+      smtp_configured: true,
+      sender_email: "a@b.com",
+      sender_name: "Me",
+      smtp_host: "smtp.gmail.com",
+      smtp_port: 587,
+      updated_at: new Date().toISOString(),
+    });
+    expect(parsed).not.toHaveProperty("smtp_password");
+  });
+
+  it("accepts the unconfigured shape", () => {
+    const parsed = SmtpSettingsResponseSchema.parse({ smtp_configured: false });
+    expect(parsed).toEqual({ smtp_configured: false });
   });
 });
