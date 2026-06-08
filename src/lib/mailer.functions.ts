@@ -121,9 +121,9 @@ export const testSmtp = createServerFn({ method: "POST" })
         auth: { user: smtp.sender_email, pass: smtp.smtp_password },
       });
       await t.verify();
-      return { ok: true };
+      return TestSmtpResponseSchema.parse({ ok: true });
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : "Connection failed" };
+      return TestSmtpResponseSchema.parse({ ok: false, error: e instanceof Error ? e.message : "Connection failed" });
     }
   });
 
