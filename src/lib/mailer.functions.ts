@@ -176,7 +176,7 @@ export const sendApplication = createServerFn({ method: "POST" })
         { to: data.recipientEmail, subject: data.subject, text: data.body, attachment },
       );
       await supabase.from("applications").update({ status: "sent" }).eq("id", app.id);
-      return { ok: true, id: app.id };
+      return SendApplicationResponseSchema.parse({ ok: true, id: app.id });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Send failed";
       await supabase.from("applications").update({ status: "failed", error_message: msg }).eq("id", app.id);
