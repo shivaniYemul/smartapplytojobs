@@ -106,7 +106,7 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
       const { error } = await supabase.from("smtp_settings").update(update).eq("user_id", userId);
       if (error) throw new Error(error.message);
     }
-    return { ok: true };
+    return SaveSmtpResponseSchema.parse({ ok: true });
   });
 
 export const testSmtp = createServerFn({ method: "POST" })
