@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { SmtpSettingsResponseSchema } from "@/lib/mailer.functions";
+import { SmtpSettingsResponseSchema } from "../src/lib/mailer.functions";
 
 // Server-side files that legitimately handle the raw password.
 const SERVER_ONLY_ALLOWLIST = [
