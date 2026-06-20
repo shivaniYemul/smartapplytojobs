@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Send, Loader2, AlertCircle } from "lucide-react";
+import { Sparkles, Send, Loader2, AlertCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 
@@ -60,6 +60,23 @@ function SingleApply() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Generation failed");
     } finally { setGenerating(false); }
+  }
+
+  function fillVars(tpl: string) {
+    const greeting = company ? `Hiring Team at ${company}` : "Hiring Manager";
+    return tpl
+      .replaceAll("{role}", role?.role_name ?? "")
+      .replaceAll("{company}", company || "your company")
+      .replaceAll("{greeting}", greeting)
+      .replaceAll("{name}", profile?.full_name ?? "")
+      .replaceAll("{jobDescription}", jobDesc ?? "");
+  }
+
+  function onUseTemplate() {
+    if (!role) { toast.error("Select a role first"); return; }
+    setSubject(fillVars(role.subject_template ?? ""));
+    setBody(fillVars(role.email_template ?? ""));
+    toast.success("Saved template loaded");
   }
 
   async function onSend() {
@@ -117,6 +134,10 @@ function SingleApply() {
             <Button onClick={onGenerate} disabled={generating || !role} className="w-full">
               {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
               Generate with AI
+            </Button>
+            <Button onClick={onUseTemplate} disabled={!role} variant="outline" className="w-full">
+              <FileText className="h-4 w-4 mr-2" />
+              Use saved template
             </Button>
           </CardContent>
         </Card>
