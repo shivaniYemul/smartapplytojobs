@@ -135,6 +135,10 @@ function SingleApply() {
               {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
               Generate with AI
             </Button>
+            <Button onClick={onUseTemplate} disabled={!role} variant="outline" className="w-full">
+              <FileText className="h-4 w-4 mr-2" />
+              Use saved template
+            </Button>
           </CardContent>
         </Card>
 
