@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Send, Loader2, AlertCircle, FileText } from "lucide-react";
+import { Sparkles, Send, Loader2, AlertCircle, FileText, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 
@@ -139,6 +139,23 @@ function SingleApply() {
               <FileText className="h-4 w-4 mr-2" />
               Use saved template
             </Button>
+
+            {role?.subject_template && role?.email_template && (
+              <div className="rounded-lg border bg-muted/40 p-4 space-y-3 mt-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Eye className="h-4 w-4" />
+                  <span>Live template preview</span>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Subject</Label>
+                  <p className="text-sm font-medium">{fillVars(role.subject_template)}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Body</Label>
+                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{fillVars(role.email_template)}</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
