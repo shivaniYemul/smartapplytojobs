@@ -62,6 +62,23 @@ function SingleApply() {
     } finally { setGenerating(false); }
   }
 
+  function fillVars(tpl: string) {
+    const greeting = company ? `Hiring Team at ${company}` : "Hiring Manager";
+    return tpl
+      .replaceAll("{role}", role?.role_name ?? "")
+      .replaceAll("{company}", company || "your company")
+      .replaceAll("{greeting}", greeting)
+      .replaceAll("{name}", profile?.full_name ?? "")
+      .replaceAll("{jobDescription}", jobDesc ?? "");
+  }
+
+  function onUseTemplate() {
+    if (!role) { toast.error("Select a role first"); return; }
+    setSubject(fillVars(role.subject_template ?? ""));
+    setBody(fillVars(role.email_template ?? ""));
+    toast.success("Saved template loaded");
+  }
+
   async function onSend() {
     if (!recipient || !subject || !body || !role) { toast.error("Fill all required fields"); return; }
     setSending(true);
