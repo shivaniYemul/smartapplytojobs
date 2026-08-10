@@ -202,6 +202,7 @@ export const sendApplication = createServerFn({ method: "POST" })
 
     const { data: smtp } = await supabase.from("smtp_settings").select("*").eq("user_id", userId).maybeSingle();
     if (!smtp) throw new Error("Please configure SMTP settings first.");
+    if (isBlockedSmtpHost(smtp.smtp_host)) throw new Error(SMTP_HOST_ERROR);
 
     const { data: role } = await supabase.from("job_roles").select("*").eq("id", data.roleId).maybeSingle();
     if (!role) throw new Error("Selected role not found.");
@@ -217,7 +218,10 @@ export const sendApplication = createServerFn({ method: "POST" })
       status: "pending",
       resume_used: role.resume_name,
     }).select("*").single();
-    if (appErr || !app) throw new Error(appErr?.message ?? "Failed to log application");
+    if (appErr || !app) {
+      console.error("[sendApplication] failed to log application", appErr);
+      throw new Error("Failed to log application. Please try again.");
+    }
 
     // Fetch resume bytes if present (via admin to avoid RLS path issues server-side)
     let attachment;
@@ -238,7 +242,8 @@ export const sendApplication = createServerFn({ method: "POST" })
       await supabase.from("applications").update({ status: "sent" }).eq("id", app.id);
       return SendApplicationResponseSchema.parse({ ok: true, id: app.id });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Send failed";
+      console.error("[sendApplication] send failed", e);
+      const msg = "Failed to send the application email. Check your SMTP settings and try again.";
       await supabase.from("applications").update({ status: "failed", error_message: msg }).eq("id", app.id);
       throw new Error(msg);
     }
