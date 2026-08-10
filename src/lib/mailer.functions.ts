@@ -144,7 +144,7 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
         smtp_host: data.host, smtp_port: data.port, smtp_password: data.password,
       });
       if (error) {
-        console.error("[saveSmtpSettings] insert failed", error);
+        console.error("[mailer:save] insert failed", error);
         throw new Error("Failed to save SMTP settings. Please try again.");
       }
     } else {
@@ -157,7 +157,7 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
       if (data.password) update.smtp_password = data.password;
       const { error } = await supabase.from("smtp_settings").update(update).eq("user_id", userId);
       if (error) {
-        console.error("[saveSmtpSettings] update failed", error);
+        console.error("[mailer:save] update failed", error);
         throw new Error("Failed to save SMTP settings. Please try again.");
       }
     }
@@ -168,7 +168,7 @@ export const testSmtp = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data: smtp, error } = await context.supabase.from("smtp_settings").select("*").eq("user_id", context.userId).maybeSingle();
-    if (error) console.error("[testSmtp] settings lookup failed", error);
+    if (error) console.error("[mailer:test] settings lookup failed", error);
     if (error || !smtp) throw new Error("SMTP settings not configured");
     if (isBlockedSmtpHost(smtp.smtp_host)) {
       return TestSmtpResponseSchema.parse({ ok: false, error: SMTP_HOST_ERROR });
@@ -182,7 +182,7 @@ export const testSmtp = createServerFn({ method: "POST" })
       await t.verify();
       return TestSmtpResponseSchema.parse({ ok: true });
     } catch (e) {
-      console.error("[testSmtp] verify failed", e);
+      console.error("[mailer:test] verify failed", e);
       return TestSmtpResponseSchema.parse({ ok: false, error: genericSmtpError() });
     }
   });
@@ -219,7 +219,7 @@ export const sendApplication = createServerFn({ method: "POST" })
       resume_used: role.resume_name,
     }).select("*").single();
     if (appErr || !app) {
-      console.error("[sendApplication] failed to log application", appErr);
+      console.error("[mailer:send] failed to log application", appErr);
       throw new Error("Failed to log application. Please try again.");
     }
 
@@ -242,7 +242,7 @@ export const sendApplication = createServerFn({ method: "POST" })
       await supabase.from("applications").update({ status: "sent" }).eq("id", app.id);
       return SendApplicationResponseSchema.parse({ ok: true, id: app.id });
     } catch (e) {
-      console.error("[sendApplication] send failed", e);
+      console.error("[mailer:send] transport error", e);
       const msg = "Failed to send the application email. Check your SMTP settings and try again.";
       await supabase.from("applications").update({ status: "failed", error_message: msg }).eq("id", app.id);
       throw new Error(msg);
