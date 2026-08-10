@@ -6,6 +6,54 @@ interface SmtpConfig {
   host: string; port: number; user: string; pass: string; senderName?: string;
 }
 
+// --- SSRF protection -------------------------------------------------------
+// Reject hosts that point at loopback, private, link-local, or cloud metadata
+// addresses so a user-supplied SMTP host cannot be used to probe the internal
+// network from the server.
+const BLOCKED_HOSTNAMES = new Set([
+  "localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback",
+  "metadata", "metadata.google.internal", "instance-data",
+]);
+
+function isBlockedSmtpHost(rawHost: string): boolean {
+  const host = rawHost.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (!host) return true;
+  if (BLOCKED_HOSTNAMES.has(host)) return true;
+  if (host.endsWith(".localhost") || host.endsWith(".internal") || host.endsWith(".local")) return true;
+
+  // IPv4 literals
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if ([a, b, Number(v4[3]), Number(v4[4])].some((n) => n > 255)) return true;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true; // link-local + metadata 169.254.169.254
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    if (a >= 224) return true; // multicast / reserved
+    return false;
+  }
+
+  // IPv6 literals
+  if (host.includes(":")) {
+    if (host === "::" || host === "::1") return true;
+    if (host.startsWith("fc") || host.startsWith("fd")) return true; // unique local
+    if (host.startsWith("fe80")) return true; // link-local
+    if (host.startsWith("::ffff:")) return isBlockedSmtpHost(host.slice(7));
+    return false;
+  }
+
+  return false;
+}
+
+const SMTP_HOST_ERROR =
+  "That SMTP host is not allowed. Use a public mail server hostname (e.g. smtp.gmail.com).";
+
+function genericSmtpError(): string {
+  return "Connection failed — check the SMTP host, port, and app password.";
+}
+
 async function sendViaNodemailer(cfg: SmtpConfig, opts: {
   to: string; subject: string; text: string; attachment?: { filename: string; content: Buffer; contentType: string };
 }) {
@@ -81,12 +129,13 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
     z.object({
       senderEmail: z.string().email().max(255),
       senderName: z.string().max(200).optional(),
-      host: z.string().min(1).max(255),
+      host: z.string().min(1).max(255).refine((h) => !isBlockedSmtpHost(h), SMTP_HOST_ERROR),
       port: z.number().int().min(1).max(65535),
       password: z.string().min(1).max(500).optional(),
     }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    if (isBlockedSmtpHost(data.host)) throw new Error(SMTP_HOST_ERROR);
     const { data: existing } = await supabase.from("smtp_settings").select("user_id").eq("user_id", userId).maybeSingle();
     if (!existing) {
       if (!data.password) throw new Error("Password is required when configuring SMTP for the first time.");
@@ -94,7 +143,10 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
         user_id: userId, sender_email: data.senderEmail, sender_name: data.senderName ?? null,
         smtp_host: data.host, smtp_port: data.port, smtp_password: data.password,
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("[mailer:save] insert failed", error);
+        throw new Error("Failed to save SMTP settings. Please try again.");
+      }
     } else {
       const update: {
         sender_email: string; sender_name: string | null; smtp_host: string; smtp_port: number; smtp_password?: string;
@@ -104,7 +156,10 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
       };
       if (data.password) update.smtp_password = data.password;
       const { error } = await supabase.from("smtp_settings").update(update).eq("user_id", userId);
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("[mailer:save] update failed", error);
+        throw new Error("Failed to save SMTP settings. Please try again.");
+      }
     }
     return SaveSmtpResponseSchema.parse({ ok: true });
   });
@@ -113,7 +168,11 @@ export const testSmtp = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data: smtp, error } = await context.supabase.from("smtp_settings").select("*").eq("user_id", context.userId).maybeSingle();
+    if (error) console.error("[mailer:test] settings lookup failed", error);
     if (error || !smtp) throw new Error("SMTP settings not configured");
+    if (isBlockedSmtpHost(smtp.smtp_host)) {
+      return TestSmtpResponseSchema.parse({ ok: false, error: SMTP_HOST_ERROR });
+    }
     try {
       const nodemailer = (await import("nodemailer")).default;
       const t = nodemailer.createTransport({
@@ -123,7 +182,8 @@ export const testSmtp = createServerFn({ method: "POST" })
       await t.verify();
       return TestSmtpResponseSchema.parse({ ok: true });
     } catch (e) {
-      return TestSmtpResponseSchema.parse({ ok: false, error: e instanceof Error ? e.message : "Connection failed" });
+      console.error("[mailer:test] verify failed", e);
+      return TestSmtpResponseSchema.parse({ ok: false, error: genericSmtpError() });
     }
   });
 
@@ -142,6 +202,7 @@ export const sendApplication = createServerFn({ method: "POST" })
 
     const { data: smtp } = await supabase.from("smtp_settings").select("*").eq("user_id", userId).maybeSingle();
     if (!smtp) throw new Error("Please configure SMTP settings first.");
+    if (isBlockedSmtpHost(smtp.smtp_host)) throw new Error(SMTP_HOST_ERROR);
 
     const { data: role } = await supabase.from("job_roles").select("*").eq("id", data.roleId).maybeSingle();
     if (!role) throw new Error("Selected role not found.");
@@ -157,7 +218,10 @@ export const sendApplication = createServerFn({ method: "POST" })
       status: "pending",
       resume_used: role.resume_name,
     }).select("*").single();
-    if (appErr || !app) throw new Error(appErr?.message ?? "Failed to log application");
+    if (appErr || !app) {
+      console.error("[mailer:send] failed to log application", appErr);
+      throw new Error("Failed to log application. Please try again.");
+    }
 
     // Fetch resume bytes if present (via admin to avoid RLS path issues server-side)
     let attachment;
@@ -178,7 +242,8 @@ export const sendApplication = createServerFn({ method: "POST" })
       await supabase.from("applications").update({ status: "sent" }).eq("id", app.id);
       return SendApplicationResponseSchema.parse({ ok: true, id: app.id });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Send failed";
+      console.error("[mailer:send] transport error", e);
+      const msg = "Failed to send the application email. Check your SMTP settings and try again.";
       await supabase.from("applications").update({ status: "failed", error_message: msg }).eq("id", app.id);
       throw new Error(msg);
     }
