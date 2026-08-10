@@ -129,12 +129,13 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
     z.object({
       senderEmail: z.string().email().max(255),
       senderName: z.string().max(200).optional(),
-      host: z.string().min(1).max(255),
+      host: z.string().min(1).max(255).refine((h) => !isBlockedSmtpHost(h), SMTP_HOST_ERROR),
       port: z.number().int().min(1).max(65535),
       password: z.string().min(1).max(500).optional(),
     }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    if (isBlockedSmtpHost(data.host)) throw new Error(SMTP_HOST_ERROR);
     const { data: existing } = await supabase.from("smtp_settings").select("user_id").eq("user_id", userId).maybeSingle();
     if (!existing) {
       if (!data.password) throw new Error("Password is required when configuring SMTP for the first time.");
@@ -142,7 +143,10 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
         user_id: userId, sender_email: data.senderEmail, sender_name: data.senderName ?? null,
         smtp_host: data.host, smtp_port: data.port, smtp_password: data.password,
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("[saveSmtpSettings] insert failed", error);
+        throw new Error("Failed to save SMTP settings. Please try again.");
+      }
     } else {
       const update: {
         sender_email: string; sender_name: string | null; smtp_host: string; smtp_port: number; smtp_password?: string;
@@ -152,7 +156,10 @@ export const saveSmtpSettings = createServerFn({ method: "POST" })
       };
       if (data.password) update.smtp_password = data.password;
       const { error } = await supabase.from("smtp_settings").update(update).eq("user_id", userId);
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("[saveSmtpSettings] update failed", error);
+        throw new Error("Failed to save SMTP settings. Please try again.");
+      }
     }
     return SaveSmtpResponseSchema.parse({ ok: true });
   });
@@ -161,7 +168,11 @@ export const testSmtp = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { data: smtp, error } = await context.supabase.from("smtp_settings").select("*").eq("user_id", context.userId).maybeSingle();
+    if (error) console.error("[testSmtp] settings lookup failed", error);
     if (error || !smtp) throw new Error("SMTP settings not configured");
+    if (isBlockedSmtpHost(smtp.smtp_host)) {
+      return TestSmtpResponseSchema.parse({ ok: false, error: SMTP_HOST_ERROR });
+    }
     try {
       const nodemailer = (await import("nodemailer")).default;
       const t = nodemailer.createTransport({
@@ -171,7 +182,8 @@ export const testSmtp = createServerFn({ method: "POST" })
       await t.verify();
       return TestSmtpResponseSchema.parse({ ok: true });
     } catch (e) {
-      return TestSmtpResponseSchema.parse({ ok: false, error: e instanceof Error ? e.message : "Connection failed" });
+      console.error("[testSmtp] verify failed", e);
+      return TestSmtpResponseSchema.parse({ ok: false, error: genericSmtpError() });
     }
   });
 
